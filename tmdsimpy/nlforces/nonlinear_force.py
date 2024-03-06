@@ -113,7 +113,7 @@ class InstantaneousForce(NonlinearForce):
         return ft, dfdu, dfdud
         
     
-    def aft(self, U, w, h, Nt=128, tol=1e-7, calc_grad=True):
+    def aft(self, U, w, h, Nt=128, tol=1e-7):
         """
         Alternating Frequency Time Domain Method for calculating the Fourier
         Coefficients of instantaneous forces. 
@@ -134,11 +134,6 @@ class InstantaneousForce(NonlinearForce):
              The default is 128.
         tol : Convergence criteria, irrelevant for instantaneous forcing.
               The default is 1e-7.
-      calc_grad : boolean
-              This argument is ignored for now. It is included for 
-              compatability of interface. Future work could use it to
-              avoid calculating dFnldU.
-              The default is True
 
         Returns
         -------
