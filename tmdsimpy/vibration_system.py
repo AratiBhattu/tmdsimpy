@@ -647,7 +647,7 @@ class VibrationSystem:
         return Xw
 
 
-    def epmc_res(self, Uwxa, Fl, h, Nt=128, aft_tol=1e-7, calc_grad=True):
+    def epmc_res(self, Uwxa, Fl, h, recov, Nt=128, aft_tol=1e-7, calc_grad=True ):
         """
         Residual for Extended Periodic Motion Concept (EPMC).
 
@@ -795,12 +795,14 @@ class VibrationSystem:
         R[:-2] = E @ (Ascale*Uwxa[:-3]) + Fnl - Fstat
         
         # Amplitude Constraint
-        R[-2]  = Uwxa[h0*Ndof:((h0+1)*Ndof)] @ (self.M @ Uwxa[h0*Ndof:((h0+1)*Ndof)]) \
-                  + Uwxa[(h0+1)*Ndof:((h0+2)*Ndof)] @ (self.M @ Uwxa[(h0+1)*Ndof:((h0+2)*Ndof)]) \
-                  - 1.0
+        # R[-2]  = Uwxa[h0*Ndof:((h0+1)*Ndof)] @ (self.M @ Uwxa[h0*Ndof:((h0+1)*Ndof)]) \
+        #           + Uwxa[(h0+1)*Ndof:((h0+2)*Ndof)] @ (self.M @ Uwxa[(h0+1)*Ndof:((h0+2)*Ndof)]) \
+        #           - 1.0
         
+        R[-2]  = recov @ Uwxa[h0*Ndof:((h0+1)*Ndof)] - Amp
         # Phase Constraint
-        R[-1]  = Fdyn @ Uwxa[:-3]
+        # R[-1]  = Fdyn @ Uwxa[:-3]
+        R[-1] = recov @  Uwxa[(h0+1)*Ndof:((h0+2)*Ndof)]
         
         if calc_grad:
             # d Force Balance / d Displacements
@@ -813,15 +815,19 @@ class VibrationSystem:
             dRdUwx[:-2, -1] = dEdxi @ (Ascale * Uwxa[:-3])
             
             # d Amplitude Constraint / d Displacements (only 1st harmonic)
-            dRdUwx[-2, h0*Ndof:(h0+1)*Ndof] = 2*Uwxa[h0*Ndof:((h0+1)*Ndof)] @ self.M
+            # dRdUwx[-2, h0*Ndof:(h0+1)*Ndof] = 2*Uwxa[h0*Ndof:((h0+1)*Ndof)] @ self.M
+            dRdUwx[-2, h0*Ndof:(h0+1)*Ndof] = recov
                 
-            dRdUwx[-2, (h0+1)*Ndof:(h0+2)*Ndof] = 2*Uwxa[(h0+1)*Ndof:((h0+2)*Ndof)] @ self.M
+            # dRdUwx[-2, (h0+1)*Ndof:(h0+2)*Ndof] = 2*Uwxa[(h0+1)*Ndof:((h0+2)*Ndof)] @ self.M
             
             # d Phase Constraint / d Displacements
-            dRdUwx[-1, :-2] = Fdyn
+            # dRdUwx[-1, :-2] = Fdyn
+            dRdUwx[-1, (h0+1)*Ndof:((h0+2)*Ndof)] = recov
             
             # d Force Balance / d Total Amplitude Scaling
             dRda[:-2] = (E + dFnldU) @ (dAscaledla * Uwxa[:-3])
+            
+            dRda[-2] = -dAmpdla
         
             return R, dRdUwx, dRda
         else:
