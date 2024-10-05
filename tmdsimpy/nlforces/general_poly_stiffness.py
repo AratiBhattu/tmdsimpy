@@ -1,6 +1,8 @@
 import numpy as np
+import scipy.sparse as sp
 from ..nlforces.nonlinear_force import InstantaneousForce
 from ..utils import harmonic as hutils
+from concurrent.futures import ThreadPoolExecutor
 
 class GenPolyForce(InstantaneousForce):
     """
@@ -44,11 +46,14 @@ class GenPolyForce(InstantaneousForce):
         self.Emat = Emat
         self.qq = qq
         
-        self.qd = np.zeros((self.qq.shape[1],self.qq.shape[0],self.qq.shape[1]))
-        
-        for i in range(self.qq.shape[1]):
-            self.qd[i,:,:] = self.qq 
-            self.qd[i,:,i] -= self.qq[:,i] != 0
+        if self.qq.shape[0] < 10000:
+            self.qd = np.zeros((self.qq.shape[1],self.qq.shape[0],self.qq.shape[1]))            
+            for i in range(self.qq.shape[1]):
+                self.qd[i,:,:] = self.qq 
+                self.qd[i,:,i] -= self.qq[:,i] != 0
+        self.qqs = sp.csr_matrix(self.qq)
+            
+
         
     def force(self, X):
         """
@@ -74,9 +79,26 @@ class GenPolyForce(InstantaneousForce):
         
         F = self.T @ fnl
         
-        dFdX =  self.T @ self.Emat @ (self.qq*np.prod(unl ** self.qd,
-                                                      axis=2).T) @ self.Q
-        
+
+        if self.qq.shape[0] < 10000:
+            dFdX =  self.T @ self.Emat @ (self.qq*np.prod(unl ** self.qd,
+                                                                  axis=2).T) @ self.Q
+        else:
+            temp =np.zeros((self.qq.shape[0],self.qq.shape[1]))
+            
+            def process_column(nr):
+                qd = self.qqs.copy()
+                qd[:,nr] -= (self.qqs[:,nr] != 0).astype(qd.dtype)
+                return nr, self.qq[:,nr]*np.prod(unl ** qd.toarray(), axis=1)
+            
+            with ThreadPoolExecutor() as executor:
+                results = executor.map(process_column, range(self.qq.shape[1]))
+                
+            for nr, column_result in results:
+                temp[:, nr] = column_result
+                
+            dFdX =  self.T @ self.Emat @ temp @ self.Q
+            
         return F, dFdX
     
     def local_force_history(self, unlt, unltdot):
@@ -115,12 +137,30 @@ class GenPolyForce(InstantaneousForce):
         ft = np.prod(unlt.reshape(unlt.shape[0],1,unlt.shape[1])**self.qq,
                      axis=2) @ self.Emat.T
         # Size of ft (Nt,Nd)
-   
+        
         for k_row in range(unlt.shape[0]):
              u1=unlt[k_row,:]
              
-             dfdu[k_row,:,:]= self.Emat @ (self.qq*np.prod(u1 ** self.qd,
-                                                           axis=2).T)
+             #For large E arrays, compuation requires huge memory
+             if self.qq.shape[0] < 10000:
+                 dfdu[k_row,:,:]= self.Emat @ (self.qq*np.prod(u1 ** self.qd,
+                                                               axis=2).T)
+             else:
+                temp =np.zeros((self.qq.shape[0],self.qq.shape[1]))
+                def process_column(nr):
+                    qd = self.qqs.copy()
+                    qd[:,nr] -= (self.qqs[:,nr] != 0).astype(qd.dtype)
+                    return nr, self.qq[:,nr]*np.prod(u1 ** qd.toarray(), axis=1)
+
+                with ThreadPoolExecutor() as executor:
+                    results = executor.map(process_column, range(self.qq.shape[1]))
+                    
+                for nr, column_result in results:
+                    temp[:, nr] = column_result                
+                
+                dfdu[k_row,:,:] = self.Emat @ temp  
+
+                 
              # Size of dffu(Nt,Nd*Nd) where Jacobian is stacked 
              # [row1 row2 row2 ...rowNd]  
                
