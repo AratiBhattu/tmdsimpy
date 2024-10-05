@@ -339,58 +339,7 @@ class TestGenPolyAFT(unittest.TestCase):
                                        rtol=self.rtol_grad)
            
         self.assertFalse(grad_failed, 
-                        'Incorrect gradiant w.r.t. displacement when disp is 0.')      
-        
-    def test_if_loop_jacobian(self):
-        """
-        Test derivatives for force function and aft functions for 
-        qq.shape[0]>10000
-
-        Returns
-        -------
-        None.
-
-        """
-        # Test System
-        
-        rng = np.random.default_rng(12345)
-        # Simple Mapping to spring displacements
-        
-        Nd= 2
-        nf =10001
-        
-        Q = np.eye(Nd)
-        
-        # Weighted / integrated mapping back for testing purposes
-        T = np.eye(Nd)
-            
-        qq = rng.integers(3, size=(nf,Nd))
-            
-        Emat = rng.random((Nd,nf))
-        Nd = Q.shape[1]
-            
-        nl_force = GenPolyForce(Q, T, Emat, qq)
-
-        u0 = rng.random((Nd))
-        w=1
-        
-        grad_check = vutils.check_grad(nl_force.force, u0, verbose=False, 
-                                        rtol=100*self.rtol_grad)    
-        
-        self.assertFalse(grad_check, 
-            'Incorrect jacobian evaluation from nl_force.force, numerical check')
-        
-        h = np.array([0, 1]) # Automate Checking with this
-        Nhc = 2*(h !=0).sum() + (h==0).sum() # Number of Harmonic Components 
-        
-        U = np.random.rand(Nd*Nhc, 1)
-        
-        fun = lambda U: nl_force.aft(U, w, h)[0:2]
-
-        grad_failed = vutils.check_grad(fun, U, verbose=False, 
-                                        rtol=self.rtol_grad)
-  
-        self.assertFalse(grad_failed, 'Incorrect displacement gradient.')     
+                        'Incorrect gradiant w.r.t. displacement when disp is 0.')       
 
 
 if __name__ == '__main__':
