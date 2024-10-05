@@ -352,7 +352,7 @@ class ElasticDryFriction3D(NonlinearForce):
 
         # # If no Grad is needed use:
         # Flocal = _local_aft_jenkins(Uwlocal, pars, u0, tuple(h), Nt, u0h0)[0]
-
+        
         if calc_grad:
         # Case with gradient and local force
             dFdUwlocal, Flocal = _local_aft_eldry_grad(Uwlocal, pars, u0, \
@@ -520,18 +520,13 @@ def _local_eldy_force(unl, up, fp, pars, meso_gap):
     fpredx = kt*(unl[0::3]-up[0::2])
     fpredy = kt*(unl[1::3]-up[1::2])
     
-    fspxy = jnp.sqrt(fpredx**2+fpredy**2)
+    fcurrx = jnp.where(fpredx < mu*fnl[2::3], fpredx, mu*fnl[2::3])
+    fcurry = jnp.where(fpredy < mu*fnl[2::3], fpredy, mu*fnl[2::3])
+        
 
-    
-    fnl = fnl.at[0::3].set(jnp.where(fspxy == 0, 0.0,  # Set to 0  fspxy = 0
-                                  jnp.where(fspxy >= mu * fnl[2::3],
-                                            fpredx / fspxy * mu * fnl[2::3],
-                                            fpredx)))
-       
-    fnl = fnl.at[1::3].set(jnp.where(fspxy == 0, 0.0,  # Set to 0 fspxy = 0
-                                      jnp.where(fspxy >= mu * fnl[2::3],
-                                                fpredy / fspxy * mu * fnl[2::3],
-                                                fpredy)))
+    # Other Directly slip limit tangent force
+    fnl = fnl.at[0::3].set(jnp.where(fcurrx>-mu*fnl[2::3], fcurrx, -mu*fnl[2::3]))
+    fnl = fnl.at[1::3].set(jnp.where(fcurry>-mu*fnl[2::3], fcurry, -mu*fnl[2::3]))
 
     return fnl, fnl
 
@@ -611,22 +606,15 @@ def _local_eldry_loop_body(ind, ft, unlt, kt, mu):
 
     """
     
-
-    fcurrx = kt*(unlt[ind, 0::3]-unlt[ind-1, 0::3]) + ft[ind-1, 0::3]  
-    fcurry = kt*(unlt[ind, 1::3]-unlt[ind-1, 1::3]) + ft[ind-1, 1::3]
+   
+    fcurrx = jnp.minimum(kt*(unlt[ind, 0::3]-unlt[ind-1, 0::3]) + ft[ind-1, 0::3],
+                            mu*ft[ind, 2::3])
     
-    fspxy = jnp.sqrt(fcurrx**2+fcurry**2)
+    fcurry = jnp.minimum(kt*(unlt[ind, 1::3]-unlt[ind-1, 1::3]) + ft[ind-1, 1::3],
+                            mu*ft[ind, 2::3])
     
-
-    ft = ft.at[ind,0::3].set(jnp.where(fspxy == 0, 0.0,  # Set to 0 fspxy = 0
-                                      jnp.where(fspxy >= mu * ft[ind,2::3],
-                                                fcurrx / fspxy * mu * ft[ind,2::3],
-                                                fcurrx)))
-    
-    ft = ft.at[ind,1::3].set(jnp.where(fspxy == 0, 0.0,  # Set to 0 when fspxy = 0
-                                      jnp.where(fspxy >= mu * ft[ind,2::3],
-                                                fcurry / fspxy * mu * ft[ind,2::3],
-                                                fcurry)))
+    ft = ft.at[ind, 0::3].set(jnp.maximum(fcurrx, -mu*ft[ind, 2::3]))
+    ft = ft.at[ind, 1::3].set(jnp.maximum(fcurry, -mu*ft[ind, 2::3]))
     
     return ft
  
@@ -811,7 +799,7 @@ def _local_force_history(unlt, pars, u0, meso_gap):
 
     # Normal Force
     ft = ft.at[:, 2::3].set(jnp.maximum((unlt[:, 2::3]-meso_gap)*kn, 0.0))
-
+    
     # Do a loop function for each update at index i
     loop_fun = lambda i,f : _local_eldry_loop_body(i, f, unlt, kt, mu)
     
@@ -824,7 +812,7 @@ def _local_force_history(unlt, pars, u0, meso_gap):
     # regime correct for the first step to be through zero. 
     ft = ft.at[-1, 0::3].set(kt*(unlt[-1, 0::3] - u0[::2]))
     ft = ft.at[-1, 1::3].set(kt*(unlt[-1, 1::3] - u0[1::2]))
-   
+        
     # Conduct exactly 2 repeats of the hysteresis loop to be converged to 
     # steady-state
     for out_ind in range(2):

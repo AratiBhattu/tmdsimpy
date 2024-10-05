@@ -41,7 +41,7 @@ import verification_utils as vutils
 ###     Testing Class                                                       ###
 ###############################################################################
 
-def run_comparison(obj, Unl, direction,  w, h, Nt, force_tol, df_tol, eldry2d, eldry3d,
+def run_comparison(obj, Unl, w, h, Nt, force_tol, df_tol, eldry2d, eldry3d,
                    delta_grad=1e-5):
     
         dof = Unl.shape[0]
@@ -54,32 +54,44 @@ def run_comparison(obj, Unl, direction,  w, h, Nt, force_tol, df_tol, eldry2d, e
         tyn = np.zeros(dof, dtype=bool)
         tyn[1::3] = True
         tyn[2::3] = True
-        
-        if direction=='X':
-            tn=txn
-        else:
-            tn=tyn
-        
+         
+       
         FnlH_vec, dFnldUH_vec, dFnldw_vec \
-            = eldry2d.aft(Unl[tn,:], w, h, Nt=Nt)
-
+            = eldry2d.aft(Unl[txn,:], w, h, Nt=Nt)
+        
         FnlH, dFnldUH, dFnldw = eldry3d.aft(Unl, w, h, Nt=Nt)
         
         
-        FH_error = np.max(np.abs(FnlH[tn]-FnlH_vec))
+        FH_error = np.max(np.abs(FnlH[txn]-FnlH_vec))
         
         
         obj.assertLess(FH_error, force_tol, 
-                        'Incorrect elastic dry friction force')
+                        'Incorrect elastic dry friction force in X direction.')
                 
         ###############
         # Tangent - Tangent Gradient in X direction
-        dFH_error = np.max(np.abs(dFnldUH[np.ix_(tn,tn)]-dFnldUH_vec))
+        dFH_error = np.max(np.abs(dFnldUH[np.ix_(txn,txn)]-dFnldUH_vec))
         
         obj.assertLess(dFH_error, df_tol, 
-                        'Incorrect Tangential AFT gradient')
+                        'Incorrect Tangential AFT gradient in X direction.')
         
-    
+        
+        
+        FnlH_vec, dFnldUH_vec, dFnldw_vec \
+            = eldry2d.aft(Unl[tyn,:], w, h, Nt=Nt)
+        
+        FH_error = np.max(np.abs(FnlH[tyn]-FnlH_vec))
+        
+        
+        obj.assertLess(FH_error, force_tol, 
+                        'Incorrect elastic dry friction force in Y direction.')
+                
+        ###############
+        # Tangent - Tangent Gradient in Y direction
+        dFH_error = np.max(np.abs(dFnldUH[np.ix_(tyn,tyn)]-dFnldUH_vec))
+        
+        obj.assertLess(dFH_error, df_tol, 
+                        'Incorrect Tangential AFT gradient in Y direction.')
         ###############
         # Numeric Gradient check, should capture dTangent/dNormal terms
         
@@ -89,7 +101,7 @@ def run_comparison(obj, Unl, direction,  w, h, Nt, force_tol, df_tol, eldry2d, e
         grad_failed = vutils.check_grad(fun, Unl, verbose=False, 
                                         atol=obj.atol_grad, h=delta_grad)
         
-        obj.assertFalse(grad_failed, 'Incorrect Gradient w.r.t. Unl')
+        obj.assertFalse(grad_failed, 'Incorrect Gradient w.r.t. Unl.')
         
         # Gradient w
         fun = lambda w : eldry3d.aft(Unl, w, h, Nt=Nt)[0::2]
@@ -97,25 +109,7 @@ def run_comparison(obj, Unl, direction,  w, h, Nt, force_tol, df_tol, eldry2d, e
         grad_failed = vutils.check_grad(fun, np.array([w]), verbose=False, 
                                         atol=obj.atol_grad)
 
-        obj.assertFalse(grad_failed, 'Incorrect Gradient w.r.t. w ')
-        
-        # Numeric Gradient check, should capture dTangent/dNormal terms
-        
-        # Check gradient - Unl
-        fun = lambda U : eldry3d.aft(U, w, h, Nt=Nt)[0:2]
-        
-        grad_failed = vutils.check_grad(fun, Unl, verbose=False, 
-                                        atol=obj.atol_grad, h=delta_grad)
-        
-        obj.assertFalse(grad_failed, 'Incorrect Gradient w.r.t. Unl for Unly')
-        
-        # Gradient w
-        fun = lambda w : eldry3d.aft(Unl, w, h, Nt=Nt)[0::2]
-        
-        grad_failed = vutils.check_grad(fun, np.array([w]), verbose=False, 
-                                        atol=obj.atol_grad)
-
-        obj.assertFalse(grad_failed, 'Incorrect Gradient w.r.t. w. for Unly')
+        obj.assertFalse(grad_failed, 'Incorrect Gradient w.r.t. w.')
         
 class TestJAXEldry(unittest.TestCase):
     
@@ -134,7 +128,7 @@ class TestJAXEldry(unittest.TestCase):
         force_tol = 5e-15 # All should be exactly equal
         df_tol = 1e-14 # rounding error on the derivatives
         dfdw_tol = 1e-16 # everything should have zero derivative w.r.t. frequency
-        self.atol_grad = 1e-8
+        self.atol_grad = 1e-9
 
         self.tols = (force_tol, df_tol, dfdw_tol)
 
@@ -219,41 +213,25 @@ class TestJAXEldry(unittest.TestCase):
         ##### Verification
         
         h = np.array([0, 1, 2, 3])
-        Unlx = np.array([[0.75, 0, 1.3, 0.0, 0.0, 1.0, 0.0],
-                        [0, 0, 0, 0.0, 0.0, 0, 0.0],
+        Unl = np.array([[0.75, 2.0, 1.3, 0.0, 0.0, 1.0, 0.0],
+                        [0.75, 2.0, 1.3, 0.0, 0.0, 1.0, 0.0],
                           [self.un_low, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]]).T
         
-        Unlx[:, 0] = Unlx[:, 0]*5
-        Unlx[:, 1] = Unlx[:, 1]*3
-        Unlx = Unlx.reshape(-1,1)
+        Unl[:, 0] = Unl[:, 0]*5
+        Unl[:, 1] = Unl[:, 1]*3
+        Unl = Unl.reshape(-1,1)
         
-        Unly = np.array([[0, 0, 0, 0.0, 0.0, 0, 0.0],
-                        [0.75, 0, 1.3, 0.0, 0.0, 1.0, 0.0],
-                          [self.un_low, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]]).T
-        
-        Unly[:, 0] = Unly[:, 0]*5
-        Unly[:, 1] = Unly[:, 1]*3
-        Unly = Unly.reshape(-1,1)
-
-        run_comparison(self, Unlx,'X', w, h, Nt, force_tol, df_tol, 
-                       self.eldry2D_force, self.eldry3D_force)
-        
-        run_comparison(self, Unly,'Y', w, h, Nt, force_tol, df_tol, 
+        run_comparison(self, Unl, w, h, Nt, force_tol, df_tol, 
                        self.eldry2D_force, self.eldry3D_force)
 
-     
-        Unlx[2] = self.un_high
-        Unly[2] = self.un_high
         
-        run_comparison(self, Unlx,'X', w, h, Nt, force_tol, df_tol, 
-                       self.eldry2D_force, self.eldry3D_force)
+        Unl[2] = self.un_high
         
-        run_comparison(self, Unly,'Y', w, h, Nt, force_tol, df_tol, 
+        run_comparison(self, Unl, w, h, Nt, force_tol, df_tol, 
                        self.eldry2D_force, self.eldry3D_force)
         
 
-        #Unlx and unly are separately defined. Slip limit chnages if both are present
-        #together. Slip limit not independent of direction
+        
         
         return
         
@@ -278,43 +256,24 @@ class TestJAXEldry(unittest.TestCase):
         ##### Verification
         
         h = np.array([0, 1, 2, 3])
-        Unlx = np.array([[0.1, 0.2, 0.05, 0.1, 0.1, 0.1, 0.0],
-                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        Unl = np.array([[0.1, 0.2, 0.05, 0.1, 0.1, 0.1, 0.0],
+                        [0.1, 0.2, 0.05, 0.1, 0.1, 0.1, 0.0],
                           [self.un_low, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]]).T
         
 
-        Unlx[:, 0] = Unlx[:, 0]*0.2
-        Unlx[:, 1] = Unlx[:, 1]*0.3
+        Unl[:, 0] = Unl[:, 0]*0.2
+        Unl[:, 1] = Unl[:, 1]*0.3
         
-        Unlx = Unlx.reshape(-1,1)
+        Unl = Unl.reshape(-1,1)
         
-        Unly = np.array([[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                         [0.1, 0.2, 0.05, 0.1, 0.1, 0.1, 0.0],
-                          [self.un_low, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]]).T
-        
-
-        Unly[:, 0] = Unly[:, 0]*0.2
-        Unly[:, 1] = Unly[:, 1]*0.3
-        
-        Unly = Unly.reshape(-1,1)
-
-        run_comparison(self, Unlx, 'X', w, h, Nt, force_tol, df_tol, 
+        run_comparison(self, Unl, w, h, Nt, force_tol, df_tol, 
                        self.eldry2D_force, self.eldry3D_force)
         
-        run_comparison(self, Unly, 'Y', w, h, Nt, force_tol, df_tol, 
-                       self.eldry2D_force, self.eldry3D_force)
-       
-        Unlx[2] = self.un_high
-        Unly[2] = self.un_high
         
-
+        Unl[2] = self.un_high
         
-        run_comparison(self, Unlx, 'X', w, h, Nt, force_tol, df_tol, 
+        run_comparison(self, Unl, w, h, Nt, force_tol, df_tol, 
                        self.eldry2D_force, self.eldry3D_force)
-        
-        run_comparison(self, Unly, 'Y', w, h, Nt, force_tol, df_tol, 
-                       self.eldry2D_force, self.eldry3D_force)
-
 
     def test_eldry3(self):
         """
@@ -337,43 +296,28 @@ class TestJAXEldry(unittest.TestCase):
         ##### Verification
 
         h = np.array([0, 1, 2, 3])
-        Unlx = np.array([[0.1, 0.2, 0.05, 0.1, 0.1, 0.1, 0.0],
-                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                          [self.un_low, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]]).T
-        
-        Unlx[:, 0] = Unlx[:, 0]*10000000000.0
-        Unlx[:, 1] = Unlx[:, 1]*20000000000.0
-        
-        Unlx = Unlx.reshape(-1,1)
-        
-        Unly = np.array([[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        Unl = np.array([[0.1, 0.2, 0.05, 0.1, 0.1, 0.1, 0.0],
                         [0.1, 0.2, 0.05, 0.1, 0.1, 0.1, 0.0],
                           [self.un_low, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]]).T
         
-        Unly[:, 0] = Unly[:, 0]*10000000000.0
-        Unly[:, 1] = Unly[:, 1]*20000000000.0
+        Unl[:, 0] = Unl[:, 0]*10000000000.0
+        Unl[:, 1] = Unl[:, 1]*20000000000.0
         
-        Unly = Unly.reshape(-1,1)
+        Unl = Unl.reshape(-1,1)
         
         
-        run_comparison(self, Unlx,'X', w, h, Nt, force_tol, df_tol, 
+        run_comparison(self, Unl, w, h, Nt, force_tol, df_tol, 
                        self.eldry2D_force, self.eldry3D_force)
         
-        run_comparison(self, Unly,'Y', w, h, Nt, force_tol, df_tol, 
-                       self.eldry2D_force, self.eldry3D_force)
         
-        Unlx[2] = self.un_high
-        Unly[2] = self.un_high
+        Unl[2] = self.un_high
         
-        run_comparison(self, Unlx,'X', w, h, Nt, force_tol, df_tol, 
-                       self.eldry2D_force, self.eldry3D_force)
-        
-        run_comparison(self, Unly,'Y', w, h, Nt, force_tol, df_tol, 
+        run_comparison(self, Unl, w, h, Nt, force_tol, df_tol, 
                        self.eldry2D_force, self.eldry3D_force)
         
         # Verify that 2nd harmonic of normal would induce same in tangent
         # [t0, n0, t1c, n1c, t1s, n1s, t2c, n2c, ]
-        FnlH, dFnldUH, dFnldw = self.eldry3D_force.aft(Unlx, w, h, Nt=Nt)
+        FnlH, dFnldUH, dFnldw = self.eldry3D_force.aft(Unl, w, h, Nt=Nt)
         
         ## Not clear 
         # self.assertGreater(np.abs(dFnldUH[9,11]), 0.1, 
@@ -403,39 +347,24 @@ class TestJAXEldry(unittest.TestCase):
         ##### Verification
         
         h = np.array([0, 1, 2, 3])
-        Unlx = np.array([[0.1, 0.2, 0.05, 0.1, 0.1, 0.1, 0.0],
-                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                          [self.un_low, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]]).T
-        
-        Unlx[:, 0] = Unlx[:, 0]*5
-        Unlx[:, 1] = Unlx[:, 1]*7
-        
-        Unlx = Unlx.reshape(-1,1)
-        
-        Unly = np.array([[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        Unl = np.array([[0.1, 0.2, 0.05, 0.1, 0.1, 0.1, 0.0],
                         [0.1, 0.2, 0.05, 0.1, 0.1, 0.1, 0.0],
                           [self.un_low, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]]).T
         
-        Unly[:, 0] = Unly[:, 0]*5
-        Unly[:, 1] = Unly[:, 1]*7
+        Unl[:, 0] = Unl[:, 0]*5
+        Unl[:, 1] = Unl[:, 1]*7
         
-        Unly = Unly.reshape(-1,1)
+        Unl = Unl.reshape(-1,1)
         
         
-        run_comparison(self, Unlx, 'X', w, h, Nt, force_tol, df_tol, 
+        run_comparison(self, Unl, w, h, Nt, force_tol, df_tol, 
                        self.eldry2D_force, self.eldry3D_force, delta_grad=3e-6)
         
-        run_comparison(self, Unly, 'Y', w, h, Nt, force_tol, df_tol, 
-                       self.eldry2D_force, self.eldry3D_force, delta_grad=3e-6)
+
         
-      
-        Unlx[2] = self.un_high
-        Unly[2] = self.un_high
+        Unl[2] = self.un_high
         
-        run_comparison(self, Unlx, 'X', w, h, Nt, force_tol, df_tol, 
-                       self.eldry2D_force, self.eldry3D_force)
-        
-        run_comparison(self, Unly, 'Y', w, h, Nt, force_tol, df_tol, 
+        run_comparison(self, Unl, w, h, Nt, force_tol, df_tol, 
                        self.eldry2D_force, self.eldry3D_force)
         
     def test_eldry5(self):
@@ -459,45 +388,29 @@ class TestJAXEldry(unittest.TestCase):
         ##### Verification
         
         h = np.array([0, 1, 2, 3])
-        Unlx = np.array([[4.29653115, 4.29165565, 2.8307871 , 4.17186848, 3.37441948,\
+        Unl = np.array([[4.29653115, 4.29165565, 2.8307871 , 4.17186848, 3.37441948,\
                            0.80543152, 3.55638299],
-                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                          [self.un_low, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]]).T
-        
-        Unlx[:, 0] = Unlx[:, 0]*5
-        Unlx[:, 1] = Unlx[:, 1]*7
-        
-        Unlx = Unlx.reshape(-1,1)
-        
-        Unly = np.array([[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                         [4.29653115, 4.29165565, 2.8307871 , 4.17186848, 3.37441948,\
                                            0.80543152, 3.55638299],
                           [self.un_low, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]]).T
         
-        Unly[:, 0] = Unly[:, 0]*5
-        Unly[:, 1] = Unly[:, 1]*7
+        Unl[:, 0] = Unl[:, 0]*5
+        Unl[:, 1] = Unl[:, 1]*7
         
-        Unly = Unly.reshape(-1,1)
+        Unl = Unl.reshape(-1,1)
         
-        run_comparison(self, Unlx,'X', w, h, Nt, force_tol, df_tol, 
-                       self.eldry2D_force, self.eldry3D_force)
-        
-        run_comparison(self, Unly,'Y', w, h, Nt, force_tol, df_tol, 
+        run_comparison(self, Unl, w, h, Nt, force_tol, df_tol, 
                        self.eldry2D_force, self.eldry3D_force)
         
         
-        Unlx[2] = self.un_high
-        Unly[2] = self.un_high
+        Unl[2] = self.un_high
         
-        run_comparison(self, Unlx,'X', w, h, Nt, force_tol, df_tol, 
-                       self.eldry2D_force, self.eldry3D_force)
-        
-        run_comparison(self, Unly,'Y', w, h, Nt, force_tol, df_tol, 
+        run_comparison(self, Unl, w, h, Nt, force_tol, df_tol, 
                        self.eldry2D_force, self.eldry3D_force)
         
         # Verify that 2nd harmonic of normal would induce same in tangent
         # [t0, n0, t1c, n1c, t1s, n1s, t2c, n2c, ]
-        FnlH, dFnldUH, dFnldw = self.eldry3D_force.aft(Unlx, w, h, Nt=Nt)
+        FnlH, dFnldUH, dFnldw = self.eldry3D_force.aft(Unl, w, h, Nt=Nt)
         
         # self.assertGreater(np.abs(dFnldUH[6,7]), 0.01, 
         #                    'Normal load may not be influencing tangent force.')
@@ -685,7 +598,7 @@ class TestJAXEldry(unittest.TestCase):
         
         Unl = Unl.reshape(-1,1)
         
-
+        
         FnlH, dFnldUH, dFnldw = self.eldry3D_force.aft(Unl, w, h, Nt=Nt)
         
         self.assertEqual(FnlH.sum(), 0, 
@@ -742,7 +655,7 @@ class TestJAXEldry(unittest.TestCase):
         
         
         U1[1::3] = U1[1::3] - 0.3
-        U2[1::3] = U1[1::3] - 0.3
+        U2[1::3] = U2[1::3] - 0.3
         
         # Scale the tangential displacements by different values
         scale_tan = [0.1, 1.0, 10.0, 100.0]
@@ -771,7 +684,7 @@ class TestJAXEldry(unittest.TestCase):
                             'Using 2 DOFs to scale force failed.')
             
             ############ Gradient
-
+            
             fun = lambda U : eldry_times_1p5.aft(U, w, h)[0:2]
             
             grad_failed = vutils.check_grad(fun, U1scale, verbose=False, 
@@ -846,8 +759,8 @@ class TestJAXEldry(unittest.TestCase):
         Fout = np.array([0.0, 0.0, 0.0])
         Fstuck = np.array([0.2, -0.2, 2.5])
         Fstuck2 = np.array([-0.2, 0.2, 2.5])
-        Fslip = np.array([30/34*1.875, -16/34*1.875, 2.5])
-        Fslip2 = np.array([-30/34*1.875, 16/34*1.875, 2.5])
+        Fslip = np.array([1.875, -1.875, 2.5])
+        Fslip2 = np.array([-1.875, 1.875, 2.5])
         
         U_list = [Uout, Ustuck, Ustuck2, Uslip, Uslip2]
         F_list = [Fout, Fstuck, Fstuck2, Fslip, Fslip2]
@@ -858,9 +771,9 @@ class TestJAXEldry(unittest.TestCase):
             
             U = U_list[i]
             F = F_list[i]
-            
-            fnl = fun(U)[0]
 
+            fnl = fun(U)[0]
+            
             self.assertLess(np.linalg.norm(F - fnl), valtol, 
                             'Static force is incorrect for index {}'.format(i))
             
