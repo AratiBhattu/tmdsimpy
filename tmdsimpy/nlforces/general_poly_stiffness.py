@@ -134,9 +134,14 @@ class GenPolyForce(InstantaneousForce):
         ## This function is modified to take multiple unlt rows from aft
         dfdu = np.zeros((unlt.shape[0],unlt.shape[1],unlt.shape[1]))
         
-        ft = np.prod(unlt.reshape(unlt.shape[0],1,unlt.shape[1])**self.qq,
-                     axis=2) @ self.Emat.T
-        # Size of ft (Nt,Nd)
+        ft =np.zeros_like(unlt)
+        
+        # ft1 = np.prod(unlt.reshape(unlt.shape[0],1,unlt.shape[1])**self.qq,
+        #      axis=2) @ self.Emat.T
+        
+        for ft_row in range(unlt.shape[0]):
+            ft[ft_row,:] = self.Emat @ np.prod(unlt[ft_row,:]**self.qq, axis=1)
+        #Size of ft (Nt,Nd)
         
         for k_row in range(unlt.shape[0]):
              u1=unlt[k_row,:]
