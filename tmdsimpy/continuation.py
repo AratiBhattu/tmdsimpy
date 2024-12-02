@@ -197,7 +197,8 @@ class Continuation:
                         'backtrackStop': np.inf, # Limits backtracking
                         'MaxIncrease': 1.2, # maximum step increase over 1 step
                         'nsolve_verbose' : False,
-                        'callback' : None
+                        'callback' : None,
+                        'CtoPsave' : None
                         }
         
         
@@ -857,6 +858,8 @@ class Continuation:
             # Callback function
             if self.config['callback'] is not None:
                 self.config['callback'](XlamP_full[step], dirC*self.CtoP)
+                if self.config['CtoPsave'] is not None:
+                    np.savez(self.config['CtoPsave'], CtoP=self.CtoP)
             
             # Update information from previous steps
             XlamPprev = np.copy(XlamP0)
@@ -874,6 +877,7 @@ class Continuation:
                 # Pass dirC for the previous step corresponding to the last
                 # converged solution
                 self.config['callback'](dirC*np.nan, dirC*self.CtoP)
+
             else:
                 # Calculate dirC for the current solution to be saved
                 dirC = self.predict(fun, XlamP0, XlamPprev, dirC)
